@@ -1,0 +1,14 @@
+[build]
+  command = "npm run build"
+  publish = "apps/frontend/dist"
+
+[functions]
+  directory = "apps/backend/functions"
+  node_bundler = "esbuild"
+  external_node_modules = ["@neondatabase/serverless","@netlify/blobs"]
+
+# Local dev proxy (optional tuning)
+[dev]
+  # vite default port is 5173; Netlify Dev listens on 8888 and proxies to targetPort
+  targetPort = 5173
+  port = 8888

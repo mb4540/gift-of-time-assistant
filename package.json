@@ -1,0 +1,25 @@
+{
+  "name": "gift-of-time-assistant",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/frontend",
+    "apps/backend"
+  ],
+  "scripts": {
+    "dev": "netlify dev",
+    "dev:frontend": "npm --workspace apps/frontend run dev",
+    "dev:backend": "netlify dev --functions=apps/backend/functions --dir=apps/frontend",
+    "build": "npm --workspace apps/frontend run build",
+    "lint": "echo \"(add your linter)\"",
+    "format": "echo \"(add prettier)\""
+  },
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0",
+    "@netlify/blobs": "^7.0.0"
+  },
+  "devDependencies": {}
+}
