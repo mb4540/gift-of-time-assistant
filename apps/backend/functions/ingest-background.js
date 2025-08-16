@@ -1,6 +1,5 @@
 import { getStore } from "@netlify/blobs";
 import { neon } from "@neondatabase/serverless";
-import VoyageAI from "voyageai";
 import { extractDoc } from "../lib/extract.js";
 
 const VOYAGE_MODEL = process.env.VOYAGE_EMBED_MODEL || "voyage-3.5";
@@ -45,10 +44,21 @@ export default async (req) => {
       return new Response(JSON.stringify({ ok: true, inserted: 0, note: "no text" }), { status: 200 });
     }
 
-    // 4) embeddings (Voyage)
-    const voyage = new VoyageAI({ apiKey: process.env.VOYAGE_API_KEY });
+    // 4) embeddings (Voyage REST API)
     const inputs = payloads.map(p => p.text);
-    const emb = await voyage.embed({ model: VOYAGE_MODEL, input: inputs });
+    const embRes = await fetch("https://api.voyageai.com/v1/embeddings", {
+      method: "POST",
+      headers: { "content-type": "application/json", "authorization": `Bearer ${process.env.VOYAGE_API_KEY}` },
+      body: JSON.stringify({
+        input: inputs,
+        model: VOYAGE_MODEL,
+        input_type: "document"
+      })
+    });
+    if (!embRes.ok) {
+      return new Response(JSON.stringify({ error: `Voyage embeddings ${embRes.status}` }), { status: 502 });
+    }
+    const emb = await embRes.json();
     if (!emb.data || emb.data.length !== inputs.length) {
       return new Response(JSON.stringify({ error: "embedding mismatch" }), { status: 500 });
     }
