@@ -11,7 +11,7 @@ function unitVector(n=DIM) {
 export default async (req) => {
   try {
     const sql = neon(process.env.NEON_DATABASE_URL)
-    const tenantId = "00000000-0000-0000-0000-000000000001" // replace w/ your tenant
+    const tenantId = "test-tenant-final-fix" // use existing tenant
     const source = "vector_smoke_test"
     const vec = unitVector()
 
