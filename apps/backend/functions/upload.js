@@ -18,11 +18,11 @@ export default async (req) => {
 
   // Fire-and-forget background ingestion (send only metadata)
   const base = process.env.PUBLIC_BASE_URL || "http://localhost:8888";
-  await fetch(new URL("/.netlify/functions/ingest-background", base), {
+  fetch(new URL("/.netlify/functions/ingest-background", base), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ blobKey: key, filename: file.name, tenantId })
-  });
+  }).catch(err => console.log("Background ingestion trigger failed:", err.message));
 
   return new Response(JSON.stringify({ ok: true, blobKey: key }), {
     status: 202, headers: { "content-type": "application/json" }
