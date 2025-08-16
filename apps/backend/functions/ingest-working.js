@@ -31,8 +31,8 @@ export default async (req) => {
     }
 
     // 2) Extract text
-    const fileBytes = await blob.arrayBuffer();
-    const text = new TextDecoder().decode(new Uint8Array(fileBytes));
+    const fileBytes = await blob.bytes();
+    const text = new TextDecoder().decode(fileBytes);
     
     if (!text.trim()) {
       return new Response(JSON.stringify({ error: "No text content found" }), { 
