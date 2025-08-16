@@ -4,6 +4,7 @@
   "type": "module",
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",
-    "@netlify/blobs": "^7.0.0"
+    "@netlify/blobs": "^7.0.0",
+    "voyageai": "^0.0.5"
   }
 }
