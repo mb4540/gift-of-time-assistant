@@ -1,37 +1,35 @@
-import { neon } from "@neondatabase/serverless";
+import { neon } from "@neondatabase/serverless"
 
-const sql = neon(process.env.NEON_DATABASE_URL);
+const DIM = parseInt(process.env.EMBED_DIM || "1024", 10)
+
+function unitVector(n=DIM) {
+  const v = new Array(n).fill(0)
+  v[0] = 1
+  return v
+}
 
 export default async (req) => {
   try {
-    // Test simple vector insertion
-    const testVector = Array(1024).fill(0.1); // Simple test vector
-    
-    await sql`
-      INSERT INTO documents (tenant_id, source, page, section, chunk, embedding, meta)
-      VALUES ('test-vector', 'test.txt', 1, 'test', 'test content', ${testVector}, '{"test": true}')
-    `;
+    const sql = neon(process.env.NEON_DATABASE_URL)
+    const tenantId = "00000000-0000-0000-0000-000000000001" // replace w/ your tenant
+    const source = "vector_smoke_test"
+    const vec = unitVector()
 
-    // Count documents
-    const count = await sql`SELECT COUNT(*) as count FROM documents WHERE tenant_id = 'test-vector'`;
-
-    return new Response(JSON.stringify({ 
-      ok: true,
-      message: "Vector insertion successful",
-      count: count[0].count,
-      timestamp: new Date().toISOString()
-    }), {
-      headers: { "content-type": "application/json" }
-    });
-
-  } catch (error) {
-    return new Response(JSON.stringify({ 
-      error: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString()
-    }), {
-      status: 500,
-      headers: { "content-type": "application/json" }
-    });
+    await sql`BEGIN`
+    try {
+      const r = await sql`
+        INSERT INTO documents (tenant_id, source, page, section, chunk, embedding, meta)
+        VALUES (${tenantId}, ${source}, ${1}, ${'smoke'}, ${'hello world'},
+                ${vec}::vector, ${ { smoke:true } })
+        RETURNING id;
+      `
+      await sql`ROLLBACK`  // change to COMMIT if you want it to persist
+      return new Response(JSON.stringify({ ok: true, inserted_id: r?.[0]?.id, dim: vec.length }))
+    } catch (e) {
+      await sql`ROLLBACK`
+      throw e
+    }
+  } catch (e) {
+    return new Response(JSON.stringify({ ok:false, error: String(e?.message||e) }), { status: 500 })
   }
-};
+}

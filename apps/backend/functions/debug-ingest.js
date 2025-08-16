@@ -1,98 +1,63 @@
-import { getStore } from "@netlify/blobs";
-import { neon } from "@neondatabase/serverless";
+import { getStore } from "@netlify/blobs"
+import { neon } from "@neondatabase/serverless"
 
-const sql = neon(process.env.NEON_DATABASE_URL);
+const sql = neon(process.env.NEON_DATABASE_URL)
+const DIM = parseInt(process.env.EMBED_DIM || "1024", 10)
+
+const fetchWithTimeout = (url, opts={}, ms=8000) =>
+  Promise.race([
+    fetch(url, opts),
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error(`timeout after ${ms}ms`)), ms))
+  ])
 
 export default async (req) => {
-  const logs = [];
-  
+  const started = Date.now()
   try {
-    const { blobKey, filename, tenantId } = JSON.parse(await req.text());
-    logs.push(`Starting ingestion: ${filename} for tenant ${tenantId}`);
+    const { blobKey, filename = 'unknown', tenantId } = await req.json()
+    const logs = []
+    const push = (m) => logs.push(`[${new Date().toISOString()}] ${m}`)
 
-    // 1) Get file from blobs
-    logs.push("Step 1: Getting file from blobs");
-    const store = getStore({ name: "uploads", consistency: "strong" });
-    const blob = await store.get(blobKey);
-    if (!blob) {
-      logs.push("ERROR: File not found in blobs");
-      return new Response(JSON.stringify({ error: "File not found", logs }), { 
-        status: 404,
-        headers: { "content-type": "application/json" }
-      });
-    }
-    logs.push("✓ File retrieved from blobs");
-
-    // 2) Extract text
-    logs.push("Step 2: Extracting text");
-    const fileBytes = await blob.bytes();
-    const text = new TextDecoder().decode(fileBytes);
-    logs.push(`✓ Text extracted, length: ${text.length}`);
-    
-    if (!text.trim()) {
-      logs.push("ERROR: No text content found");
-      return new Response(JSON.stringify({ error: "No text content", logs }), { 
-        status: 400,
-        headers: { "content-type": "application/json" }
-      });
+    if (!blobKey || !tenantId) {
+      return new Response(JSON.stringify({ ok:false, error:"blobKey and tenantId required" }), { status: 400 })
     }
 
-    // 3) Generate embeddings
-    logs.push("Step 3: Generating embeddings via Voyage API");
-    const embRes = await fetch("https://api.voyageai.com/v1/embeddings", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.VOYAGE_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        input: [text.trim()],
-        model: process.env.VOYAGE_EMBED_MODEL || "voyage-3.5"
-      })
-    });
+    // 1) Blob exists?
+    push(`checking blob ${blobKey}`)
+    const store = getStore({ name: "uploads" })
+    const meta = await store.getMetadata(blobKey)
+    if (!meta) return new Response(JSON.stringify({ ok:false, step:"blob", error:"blob not found" }), { status:404 })
+    push(`blob size=${meta.size}`)
 
-    if (!embRes.ok) {
-      const errorText = await embRes.text();
-      logs.push(`ERROR: Voyage API failed: ${embRes.status} ${errorText}`);
-      return new Response(JSON.stringify({ error: "Embedding failed", logs, voyageError: errorText }), { 
-        status: 500,
-        headers: { "content-type": "application/json" }
-      });
+    // 2) Neon reachable?
+    try {
+      await sql`select 1`
+      push("neon ok")
+    } catch (e) {
+      push(`neon error: ${e.message}`)
+      return new Response(JSON.stringify({ ok:false, step:"neon", error:String(e.message||e), logs }))
     }
 
-    const embJson = await embRes.json();
-    const embedding = embJson.data[0].embedding;
-    logs.push(`✓ Embedding generated, dimensions: ${embedding.length}`);
+    // 3) Minimal vector insert sanity (no external APIs)
+    const vec = new Array(DIM).fill(0); vec[0]=1
+    try {
+      await sql`BEGIN`
+      await sql`
+        INSERT INTO documents (tenant_id, source, page, section, chunk, embedding, meta)
+        VALUES (${tenantId}, ${filename}, ${1}, ${'debug'}, ${'hello'},
+                ${vec}::vector, ${ { debug:true } })
+      `
+      await sql`ROLLBACK`
+      push(`vector insert ok (dim=${DIM})`)
+    } catch (e) {
+      await sql`ROLLBACK`
+      push(`vector insert error: ${e.message}`)
+      return new Response(JSON.stringify({ ok:false, step:"vector", error:String(e.message||e), logs }))
+    }
 
-    // 4) Store in database
-    logs.push("Step 4: Storing in database");
-    const result = await sql`
-      INSERT INTO documents (tenant_id, source, page, section, chunk, embedding, meta)
-      VALUES (${tenantId}, ${filename}, 1, ${filename}, ${text.trim()}, ${embedding}, ${JSON.stringify({ source: filename })})
-      RETURNING id
-    `;
-    logs.push(`✓ Document stored with ID: ${result[0].id}`);
-
-    return new Response(JSON.stringify({ 
-      ok: true, 
-      inserted: 1,
-      documentId: result[0].id,
-      logs,
-      timestamp: new Date().toISOString()
-    }), {
-      headers: { "content-type": "application/json" }
-    });
-
-  } catch (error) {
-    logs.push(`FATAL ERROR: ${error.message}`);
-    return new Response(JSON.stringify({ 
-      error: error.message,
-      stack: error.stack,
-      logs,
-      timestamp: new Date().toISOString()
-    }), {
-      status: 500,
-      headers: { "content-type": "application/json" }
-    });
+    // 4) Done — DO NOT call Llama/Voyage here; keep under 28s
+    push(`success; elapsed=${Date.now()-started}ms`)
+    return new Response(JSON.stringify({ ok:true, logs }), { headers:{ "content-type":"application/json" } })
+  } catch (e) {
+    return new Response(JSON.stringify({ ok:false, error:String(e?.message||e) }), { status:500 })
   }
-};
+}
