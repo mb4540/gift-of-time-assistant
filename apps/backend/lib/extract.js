@@ -18,8 +18,8 @@ export async function extractDoc({ fileBytes, filename }) {
     if (!up.ok) throw new Error(`Upload failed: ${up.status} ${await up.text()}`);
     const { job_id } = await up.json();
 
-    // 2) Poll until done
-    for (let i = 0; i < 20; i++) { // Max 30 seconds
+    // 2) Poll until done (max 6 seconds to avoid function timeout)
+    for (let i = 0; i < 4; i++) {
       await new Promise(r => setTimeout(r, 1500));
       const st = await fetch(`https://api.cloud.llamaindex.ai/api/v1/parsing/job/${job_id}`, {
         headers: { Authorization: `Bearer ${KEY}` },
@@ -27,6 +27,7 @@ export async function extractDoc({ fileBytes, filename }) {
       const js = await st.json();
       if (js.status === "succeeded") break;
       if (js.status === "failed") throw new Error(`Parse failed: ${JSON.stringify(js)}`);
+      if (i === 3) throw new Error(`Parse timeout after 6 seconds`);
     }
 
     // 3) Fetch markdown results
