@@ -68,7 +68,7 @@ export default async (req) => {
     // 4) Store in database
     await sql`
       INSERT INTO documents (tenant_id, source, page, section, chunk, embedding, meta)
-      VALUES (${tenantId}, ${filename}, 1, ${filename}, ${text.trim()}, ${embedding}::vector, ${JSON.stringify({ source: filename })})
+      VALUES (${tenantId}, ${filename}, 1, ${filename}, ${text.trim()}, ${JSON.stringify(embedding)}, ${JSON.stringify({ source: filename })})
     `;
 
     return new Response(JSON.stringify({ 

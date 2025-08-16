@@ -44,7 +44,7 @@ export default async (req) => {
       await sql`
         INSERT INTO documents (tenant_id, source, page, section, chunk, embedding, meta)
         VALUES (${tenantId}, ${filename}, ${1}, ${'debug'}, ${'hello'},
-                ${vec}::vector, ${ { debug:true } })
+                ${JSON.stringify(vec)}, ${ { debug:true } })
       `
       await sql`ROLLBACK`
       push(`vector insert ok (dim=${DIM})`)

@@ -20,7 +20,7 @@ export default async (req) => {
       const r = await sql`
         INSERT INTO documents (tenant_id, source, page, section, chunk, embedding, meta)
         VALUES (${tenantId}, ${source}, ${1}, ${'smoke'}, ${'hello world'},
-                ${vec}::vector, ${ { smoke:true } })
+                ${JSON.stringify(vec)}, ${ { smoke:true } })
         RETURNING id;
       `
       await sql`ROLLBACK`  // change to COMMIT if you want it to persist
